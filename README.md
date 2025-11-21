@@ -41,4 +41,14 @@ Ensure these are included in your `pubspec.yaml` under `assets:`.
 1. Clone the repo:
 ```bash
 git clone https://github.com/AgapeIntelligence/Triadic-collapse.git
+
+---
+
+## Run Instructions
+
+After cloning the repo:
+
+```bash
+flutter pub get
+flutter run
 cd Triadic-collapse
