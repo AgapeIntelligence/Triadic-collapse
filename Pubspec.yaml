@@ -1,19 +1,21 @@
 name: triadic_collapse
-description: Triadic Collapse — real-time quantum lattice game. Voice drives 100k+ oscillators to 3-6-9 synchrony → GHZ collapse. Pure math.
-
+description: Triadic Collapse — real-time quantum lattice game. Your voice drives 100k+ oscillators to perfect 3-6-9 synchrony → triggers live GHZ collapse. Pure math, zero fluff. Flutter · iOS/Android · 120 fps. Launch Dec 2025.
 publish_to: 'none'
-
 version: 1.0.0+1
 
 environment:
-  sdk: '>=3.0.0 <4.0.0'
-  flutter: ">=3.10.0"
+  sdk: '>=3.4.0 <4.0.0'
+  flutter: ">=3.22.0"
 
 dependencies:
   flutter:
     sdk: flutter
-  vector_math: ^2.1.4          # For vector ops in lattice
-  collection: ^1.18.0          # For typed lists
+  vector_math: ^2.1.4
+  complex: ^2.0.0                  # GHZ evolution
+  noise_meter: ^4.0.0               # live microphone → voice envelope
+  just_audio: ^0.9.36               # collapse sound + ambient
+  flutter_riverpod: ^2.5.1          # clean state management
+  collection: ^1.18.0
 
 dev_dependencies:
   flutter_test:
@@ -24,3 +26,4 @@ flutter:
   uses-material-design: true
   assets:
     - assets/core/evie_ghosts.npy
+    - assets/audio/
