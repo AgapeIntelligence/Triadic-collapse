@@ -9,6 +9,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'; // For haptic feedback
 import 'package:noise_meter/noise_meter.dart'; // For microphone
+import 'package:permission_handler/permission_handler.dart'; // For microphone permissions
 import '../core/evie_369_pure.dart';
 import '../core/triadic_ghz_full_evolution.dart';
 
@@ -48,8 +49,10 @@ class _LatticeViewState extends State<LatticeView> with TickerProviderStateMixin
     );
     R = Evie369Pure.orderParameter(phases);
 
-    pulseController = AnimationController(vsync: this, duration: const Duration(milliseconds: 1200))
-      ..addListener(() => setState(() {}));
+    pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    )..addListener(() => setState(() {}));
 
     // Start microphone
     _startMicrophone();
@@ -88,15 +91,18 @@ class _LatticeViewState extends State<LatticeView> with TickerProviderStateMixin
   // Start microphone and process audio
   Future<void> _startMicrophone() async {
     try {
-      await Permission.microphone.request();
-      if (await Permission.microphone.isGranted) {
+      final status = await Permission.microphone.request();
+      if (status.isGranted) {
         _micSubscription = _noiseMeter.noiseStream.listen(
           (noise) {
             if (noise != null && noise.meanDecibels != null) {
               setState(() => currentDb = noise.meanDecibels!.clamp(0.0, 100.0));
             }
           },
-          onError: (error) => print("Mic error: $error"),
+          onError: (error) {
+            print("Mic error: $error");
+            setState(() => currentDb = 45.0); // Fallback on error
+          },
           cancelOnError: true,
         );
       } else {
