@@ -8,7 +8,7 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'; // For haptic feedback
-import 'package:flutter_audio_capture/flutter_audio_capture.dart'; // For microphone
+import 'package:noise_meter/noise_meter.dart'; // For microphone
 import '../core/evie_369_pure.dart';
 import '../core/triadic_ghz_full_evolution.dart';
 
@@ -19,7 +19,7 @@ class LatticeView extends StatefulWidget {
   const LatticeView({
     Key? key,
     this.nOscillators = 80000,
-    this.updateIntervalMs = 16.6, // ~60fps
+    this.updateIntervalMs = 8.33, // ~120fps (adjust to 16.6 for 60fps if needed)
   }) : super(key: key);
 
   @override
@@ -36,7 +36,7 @@ class _LatticeViewState extends State<LatticeView> with TickerProviderStateMixin
 
   // Microphone stream controller
   StreamSubscription? _micSubscription;
-  final FlutterAudioCapture _audioCapture = FlutterAudioCapture();
+  final NoiseMeter _noiseMeter = NoiseMeter();
 
   @override
   void initState() {
@@ -73,7 +73,7 @@ class _LatticeViewState extends State<LatticeView> with TickerProviderStateMixin
           lastCollapse = result['outcome'] as String;
           pulseController.forward(from: 0.0);
         });
-        _triggerHaptic(R, result['probPlus'] as double); // Pass probPlus for intensity
+        _triggerHaptic(R, result['probPlus'] as double);
       }
     });
   }
@@ -81,7 +81,6 @@ class _LatticeViewState extends State<LatticeView> with TickerProviderStateMixin
   @override
   void dispose() {
     _micSubscription?.cancel();
-    _audioCapture.stop();
     pulseController.dispose();
     super.dispose();
   }
@@ -89,19 +88,20 @@ class _LatticeViewState extends State<LatticeView> with TickerProviderStateMixin
   // Start microphone and process audio
   Future<void> _startMicrophone() async {
     try {
-      await _audioCapture.start(
-        listener: (data) {
-          final sum = data.reduce((a, b) => a + b.abs());
-          final average = sum / data.length;
-          final db = 20 * log(average / 1.0) + 60; // Adjust for Float64 range
-          if (!db.isNaN && db.isFinite) {
-            setState(() => currentDb = db.clamp(0.0, 100.0));
-          }
-        },
-        onError: (error) => print("Mic error: $error"),
-        sampleRate: 44100,
-        bufferSize: 1024,
-      );
+      await Permission.microphone.request();
+      if (await Permission.microphone.isGranted) {
+        _micSubscription = _noiseMeter.noiseStream.listen(
+          (noise) {
+            if (noise != null && noise.meanDecibels != null) {
+              setState(() => currentDb = noise.meanDecibels!.clamp(0.0, 100.0));
+            }
+          },
+          onError: (error) => print("Mic error: $error"),
+          cancelOnError: true,
+        );
+      } else {
+        setState(() => currentDb = 45.0); // Fallback if permission denied
+      }
     } catch (e) {
       print("Microphone initialization error: $e");
       setState(() => currentDb = 45.0);
@@ -110,7 +110,7 @@ class _LatticeViewState extends State<LatticeView> with TickerProviderStateMixin
 
   // Trigger haptic feedback with probPlus influence
   void _triggerHaptic(double intensity, double probPlus) {
-    final adjustedIntensity = intensity * probPlus; // Scale by collapse probability
+    final adjustedIntensity = intensity * probPlus;
     if (adjustedIntensity < 0.3) {
       HapticFeedback.lightImpact();
     } else if (adjustedIntensity < 0.7) {
