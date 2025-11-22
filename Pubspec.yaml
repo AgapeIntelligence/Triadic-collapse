@@ -12,10 +12,12 @@ dependencies:
     sdk: flutter
   vector_math: ^2.1.4
   complex: ^2.0.0                  # GHZ evolution
-  noise_meter: ^4.0.0               # live microphone → voice envelope
-  just_audio: ^0.9.36               # collapse sound + ambient
-  flutter_riverpod: ^2.5.1          # clean state management
+  noise_meter: ^4.0.0               # Live microphone → voice envelope (replaces flutter_audio_capture)
+  just_audio: ^0.9.36               # Collapse sound + ambient
+  flutter_riverpod: ^2.5.1          # Clean state management
   collection: ^1.18.0
+  permission_handler: ^10.0.0       # For microphone permissions
+  haptic_feedback: ^0.1.0           # Enhanced haptic control (optional, replace if using flutter/services.dart)
 
 dev_dependencies:
   flutter_test:
@@ -27,3 +29,19 @@ flutter:
   assets:
     - assets/core/evie_ghosts.npy
     - assets/audio/
+
+# Additional configuration for 120 fps
+flutter:
+  assets:
+    - assets/core/evie_ghosts.npy
+    - assets/audio/
+  # Enable high refresh rate (120 fps) where supported
+  high_contrast: false
+  cupertino: true
+
+# Optional: Performance optimization
+dependency_overrides:
+  flutter:
+    git:
+      url: https://github.com/flutter/flutter.git
+      ref: stable
