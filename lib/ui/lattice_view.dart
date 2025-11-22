@@ -73,7 +73,7 @@ class _LatticeViewState extends State<LatticeView> with TickerProviderStateMixin
           lastCollapse = result['outcome'] as String;
           pulseController.forward(from: 0.0);
         });
-        _triggerHaptic(R, result['probPlus'] as double); // Pass probPlus for haptic intensity
+        _triggerHaptic(R, result['probPlus'] as double); // Pass probPlus for intensity
       }
     });
   }
