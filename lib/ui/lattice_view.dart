@@ -8,6 +8,7 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'; // For haptic feedback
+import 'package:flutter_audio_capture/flutter_audio_capture.dart'; // For microphone
 import '../core/evie_369_pure.dart';
 import '../core/triadic_ghz_full_evolution.dart';
 
@@ -18,7 +19,7 @@ class LatticeView extends StatefulWidget {
   const LatticeView({
     Key? key,
     this.nOscillators = 80000,
-    this.updateIntervalMs = 16.6, // Updated to ~60fps (was 33.0 for ~30fps)
+    this.updateIntervalMs = 16.6, // ~60fps
   }) : super(key: key);
 
   @override
@@ -35,6 +36,7 @@ class _LatticeViewState extends State<LatticeView> with TickerProviderStateMixin
 
   // Microphone stream controller
   StreamSubscription? _micSubscription;
+  final FlutterAudioCapture _audioCapture = FlutterAudioCapture();
 
   @override
   void initState() {
@@ -60,8 +62,8 @@ class _LatticeViewState extends State<LatticeView> with TickerProviderStateMixin
         setState(() => R = newR);
       }
 
-      // Trigger collapse with live dB
-      if (R > 0.50 && rng.nextDouble() < 0.15) { // Adjusted from 0.999 to 0.50
+      // Trigger collapse with live dB, with debounce
+      if (R > 0.50 && !pulseController.isAnimating && rng.nextDouble() < 0.15) {
         final result = TriadicGHZ.evolveTriadicGHZ(
           R_lattice: R,
           voiceEnvelopeDb: currentDb,
@@ -71,45 +73,47 @@ class _LatticeViewState extends State<LatticeView> with TickerProviderStateMixin
           lastCollapse = result['outcome'] as String;
           pulseController.forward(from: 0.0);
         });
-        _triggerHaptic(R); // Trigger haptic on collapse
+        _triggerHaptic(R, result['probPlus'] as double); // Pass probPlus for haptic intensity
       }
     });
   }
 
   @override
   void dispose() {
-    _micSubscription?.cancel(); // Clean up microphone stream
+    _micSubscription?.cancel();
+    _audioCapture.stop();
     pulseController.dispose();
     super.dispose();
   }
 
   // Start microphone and process audio
-  void _startMicrophone() async {
+  Future<void> _startMicrophone() async {
     try {
-      final audioSession = await FlutterAudioCapture.start(
+      await _audioCapture.start(
+        listener: (data) {
+          final sum = data.reduce((a, b) => a + b.abs());
+          final average = sum / data.length;
+          final db = 20 * log(average / 1.0) + 60; // Adjust for Float64 range
+          if (!db.isNaN && db.isFinite) {
+            setState(() => currentDb = db.clamp(0.0, 100.0));
+          }
+        },
+        onError: (error) => print("Mic error: $error"),
         sampleRate: 44100,
         bufferSize: 1024,
       );
-      _micSubscription = audioSession.listen((data) {
-        // Calculate approximate dB from raw PCM data
-        final sum = data.reduce((a, b) => a + b.abs());
-        final average = sum / data.length;
-        final db = 20 * log(average / 32768.0) + 60; // Convert to dB, offset for typical mic
-        if (!db.isNaN && db.isFinite) {
-          setState(() => currentDb = db.clamp(0.0, 100.0)); // Clamp to reasonable range
-        }
-      });
     } catch (e) {
-      print("Microphone error: $e");
-      setState(() => currentDb = 45.0); // Fallback to default
+      print("Microphone initialization error: $e");
+      setState(() => currentDb = 45.0);
     }
   }
 
-  // Trigger haptic feedback
-  void _triggerHaptic(double intensity) {
-    if (intensity < 0.3) {
+  // Trigger haptic feedback with probPlus influence
+  void _triggerHaptic(double intensity, double probPlus) {
+    final adjustedIntensity = intensity * probPlus; // Scale by collapse probability
+    if (adjustedIntensity < 0.3) {
       HapticFeedback.lightImpact();
-    } else if (intensity < 0.7) {
+    } else if (adjustedIntensity < 0.7) {
       HapticFeedback.mediumImpact();
     } else {
       HapticFeedback.heavyImpact();
@@ -151,8 +155,8 @@ class _TriadicLatticePainter extends CustomPainter {
       final y = center.dy + radius * sin(angle + pulse * 5);
 
       final brightness = (R + pulse * 0.5).clamp(0.3, 1.0);
-      final hue = 160 + 200 * R; // teal → gold
-      paint.color = HSVColor.fromAHSV(brightness, hue, 1.0, 1.0).toColor();
+      final hue = lastCollapse.contains('+') ? 60 : 160; // Gold for +|++>, Teal for -|--->
+      paint.color = HSVColor.fromAHSV(brightness, hue.toDouble(), 1.0, 1.0).toColor();
 
       final particleSize = 2.0 + 8.0 * R + pulse * 15;
       canvas.drawCircle(
@@ -162,11 +166,11 @@ class _TriadicLatticePainter extends CustomPainter {
       );
     }
 
-    // Collapse flash
+    // Collapse flash (outcome-specific)
     if (pulse > 0.01) {
       paint.color = Color.lerp(
-        Colors.amber.withOpacity(0.0),
-        Colors.amber.withOpacity(0.9),
+        Colors.transparent,
+        lastCollapse.contains('+') ? Colors.gold.withOpacity(0.9) : Colors.teal.withOpacity(0.9),
         pulse,
       )!;
       canvas.drawRect(Offset.zero & size, paint);
@@ -186,7 +190,10 @@ class _TriadicLatticePainter extends CustomPainter {
         if (lastCollapse.isNotEmpty)
           TextSpan(
             text: lastCollapse.split(' ').first,
-            style: const TextStyle(fontSize: 32, color: Colors.amber),
+            style: TextStyle(
+              fontSize: 32,
+              color: lastCollapse.contains('+') ? Colors.gold : Colors.teal,
+            ),
           ),
       ],
     );
